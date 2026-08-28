@@ -1,37 +1,21 @@
 package ec.edu.uteq.appweb.biblioteca.integration;
 
+import ec.edu.uteq.appweb.biblioteca.config.CacheConfig;
+import ec.edu.uteq.appweb.biblioteca.exception.ServicioExternoException;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 /**
- * ============================================================================
- * TODO-U4-4 (Objetivo especifico 3 de la Guia): CONSUMO DE API EXTERNA
- * ============================================================================
+ * TODO-U4-4 implementado: consumo de Open Library con cache-aside y manejo
+ * diferenciado de fallos.
  *
- * El bean RestClient ya viene configurado con baseUrl y timeouts
- * (ver RestClientConfig). Usted debe implementar consultarPorIsbn con:
- *
- *   1. Cache-aside en Redis sobre el namespace CacheConfig.CACHE_OPENLIBRARY,
- *      cuyo TTL de 24 horas ya esta definido. La anotacion @Cacheable basta;
- *      justifique el TTL en el informe segun la volatilidad del dato.
- *   2. Manejo diferenciado de fallos, que es lo que realmente se evalua:
- *        - 404 del proveedor  -> devolver vacio, NO es un error de su sistema.
- *        - 4xx distinto de 404 -> ServicioExternoException.
- *        - 5xx                 -> ServicioExternoException.
- *        - timeout o fallo de red -> ServicioExternoException.
- *      GlobalExceptionHandler ya convierte ServicioExternoException en un
- *      ProblemDetail 502 Bad Gateway, asi que no escriba respuestas aqui.
- *   3. NUNCA cachear un fallo: use unless o condition para evitarlo.
- *
- * Pista con RestClient:
- *   restClient.get()
- *       .uri("/isbn/{isbn}.json", isbn)
- *       .retrieve()
- *       .onStatus(estado -> estado.value() == 404, (peticion, respuesta) -> { })
- *       .body(OpenLibraryResponse.class);
- *
- * Evidencia que pide la Guia: capture la clave cacheada con
- *   docker compose exec redis redis-cli KEYS "openlibrary*"
+ * exchange() se usa en vez de retrieve().onStatus(...) porque un 404 de Open
+ * Library no trae un cuerpo JSON valido: intentar convertirlo con .body(...)
+ * lanzaria una excepcion de lectura en lugar de permitir devolver null.
+ * exchange() da acceso directo al estado antes de decidir si conviene
+ * convertir el cuerpo.
  */
 @Component
 public class OpenLibraryClient {
@@ -42,7 +26,24 @@ public class OpenLibraryClient {
         this.restClient = restClientExterno;
     }
 
+    @Cacheable(value = CacheConfig.CACHE_OPENLIBRARY, key = "#isbn", unless = "#result == null")
     public OpenLibraryResponse consultarPorIsbn(String isbn) {
-        throw new UnsupportedOperationException("TODO-U4-4: consumir Open Library con cache y manejo de errores");
+        try {
+            return restClient.get()
+                    .uri("/isbn/{isbn}.json", isbn)
+                    .exchange((peticion, respuesta) -> {
+                        int estado = respuesta.getStatusCode().value();
+                        if (estado == 404) {
+                            return null;
+                        }
+                        if (respuesta.getStatusCode().isError()) {
+                            throw new ServicioExternoException(
+                                    "Open Library respondio con estado " + estado + " para el ISBN " + isbn);
+                        }
+                        return respuesta.bodyTo(OpenLibraryResponse.class);
+                    });
+        } catch (ResourceAccessException ex) {
+            throw new ServicioExternoException("Open Library no respondio a tiempo para el ISBN " + isbn, ex);
+        }
     }
 }
