@@ -10,13 +10,13 @@
 
 ## Datos del estudiante
 
-| Campo | Valor |
-|---|---|
-| Apellidos y nombres | |
-| Número de carnet | |
-| Correo institucional | |
-| Fecha | |
-| URL del repositorio | |
+| Campo | Valor                       |
+|---|-----------------------------|
+| Apellidos y nombres | Loor Medranda Marlon Taylor |
+| Número de carnet | 0928087469                  |
+| Correo institucional | mloorm14@uteq.edu.ec        |
+| Fecha | 28/08/2026                  |
+| URL del repositorio |       https://github.com/mloorm14/biblioteca-u4-base.git                      |
 
 ---
 
@@ -27,10 +27,10 @@
 **Respuesta:**
 
 
-
 **b) El proyecto base expone `GET /api/v1/autores` y guarda el estado de la sesión del usuario solo en el JWT que el cliente envía en cada petición. Explique qué restricción concreta se está cumpliendo con esa decisión y qué consecuencia práctica tiene para escalar el sistema a varios servidores detrás de un balanceador. (3 puntos)**
 
 **Respuesta:**
+
 
 
 
@@ -53,8 +53,7 @@
 **b) Un compañero afirma: «como el JWT va firmado, puedo guardar en el *payload* la contraseña del usuario sin riesgo». Explique por qué está equivocado, precisando la diferencia entre firmar y cifrar. (2 puntos)**
 
 **Respuesta:**
-
-
+No se puede, porque la diferencia entre firmar como seguro y encriptar como seguro es muito diferente
 
 **c) El JWT es *stateless* por diseño, lo que genera un problema conocido: no se puede invalidar un token antes de que expire. Describa dos estrategias distintas para revocarlo y señale la desventaja de cada una. (3 puntos)**
 
@@ -138,6 +137,6 @@ Para cada escenario indique el código HTTP correcto y explique en una línea po
 
 Marque con una `x` y complete:
 
-- [ ] Declaro que estas respuestas son de mi autoría, redactadas durante la sesión de examen, sin asistencia de inteligencia artificial ni comunicación con terceros.
+- [x] Declaro que estas respuestas son de mi autoría, redactadas durante la sesión de examen, sin asistencia de inteligencia artificial ni comunicación con terceros.
 
-Firma (nombre completo): ______________________________
+Firma (nombre completo): Loor Medranda Marlon Taylor
