@@ -5,8 +5,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
@@ -22,20 +20,30 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * org.testcontainers.postgresql.PostgreSQLContainer. La ruta antigua
  * org.testcontainers.containers.PostgreSQLContainer quedo obsoleta.
  *
+ * El contenedor se arranca a mano en un inicializador estatico, sin @Testcontainers
+ * ni @Container: esas anotaciones detienen el contenedor en el afterAll de CADA
+ * clase de prueba, pero el ApplicationContext de Spring queda cacheado entre clases
+ * (misma configuracion) con el DataSource apuntando al puerto original. La siguiente
+ * clase reinicia el contenedor en un puerto nuevo y el contexto cacheado queda
+ * huerfano, apuntando a un puerto muerto. Sin esas anotaciones, el contenedor se
+ * inicia una sola vez por JVM y Testcontainers lo limpia via Ryuk al terminar.
+ *
  * Requisito: Docker debe estar corriendo en la maquina.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Testcontainers
 @Tag("integracion")
 public abstract class BaseIntegracionTest {
 
-    @Container
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES =
             new PostgreSQLContainer("postgres:18-alpine")
                     .withDatabaseName("biblioteca_test")
                     .withUsername("test")
                     .withPassword("test");
+
+    static {
+        POSTGRES.start();
+    }
 }

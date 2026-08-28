@@ -1,17 +1,14 @@
 package ec.edu.uteq.appweb.biblioteca.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import ec.edu.uteq.appweb.biblioteca.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.net.URI;
 import java.time.OffsetDateTime;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ProblemDetail;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -44,8 +41,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
-                                           JwtAuthenticationFilter jwtAuthenticationFilter,
-                                           ObjectMapper mapper) throws Exception {
+                                           JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -55,24 +51,29 @@ public class SecurityConfig {
                                 "/actuator/health").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(manejo -> manejo
-                        .authenticationEntryPoint((peticion, respuesta, ex) -> escribirProblema(respuesta, mapper,
+                        .authenticationEntryPoint((peticion, respuesta, ex) -> escribirProblema(respuesta,
                                 HttpStatus.UNAUTHORIZED, "No autenticado",
                                 "Se requiere un token JWT valido para acceder a este recurso", "no-autenticado"))
-                        .accessDeniedHandler((peticion, respuesta, ex) -> escribirProblema(respuesta, mapper,
+                        .accessDeniedHandler((peticion, respuesta, ex) -> escribirProblema(respuesta,
                                 HttpStatus.FORBIDDEN, "Acceso denegado",
                                 "No tiene permisos suficientes para ejecutar esta operacion", "acceso-denegado")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
-    private void escribirProblema(HttpServletResponse respuesta, ObjectMapper mapper, HttpStatus estado,
+    /**
+     * Se escribe el ProblemDetail a mano, sin depender de un bean ObjectMapper/JsonMapper:
+     * este rechazo ocurre en la cadena de filtros de Spring Security, antes de que el
+     * mecanismo de serializacion de Spring MVC entre en juego, y el tipo de mapper JSON
+     * que autoconfigura Spring Boot depende de que libreria Jackson este en el classpath.
+     */
+    private void escribirProblema(HttpServletResponse respuesta, HttpStatus estado,
                                   String titulo, String detalle, String tipo) throws IOException {
-        ProblemDetail problema = ProblemDetail.forStatusAndDetail(estado, detalle);
-        problema.setTitle(titulo);
-        problema.setType(URI.create(BASE_TIPO + tipo));
-        problema.setProperty("timestamp", OffsetDateTime.now().toString());
+        String cuerpo = """
+                {"type":"%s%s","title":"%s","status":%d,"detail":"%s","timestamp":"%s"}\
+                """.formatted(BASE_TIPO, tipo, titulo, estado.value(), detalle, OffsetDateTime.now());
         respuesta.setStatus(estado.value());
         respuesta.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        respuesta.getWriter().write(mapper.writeValueAsString(problema));
+        respuesta.getWriter().write(cuerpo);
     }
 }

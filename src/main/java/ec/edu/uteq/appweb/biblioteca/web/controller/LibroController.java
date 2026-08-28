@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,7 +61,14 @@ public class LibroController {
         this.openLibraryClient = openLibraryClient;
     }
 
+    /**
+     * @Transactional aqui (no en LibroService, que no se toca): con open-in-view=false
+     * la sesion de Hibernate se cierra al salir del servicio, y LibroMapper lee
+     * autor/editorial/categoria, que son FetchType.LAZY. Sin mantener la sesion
+     * abierta hasta el mapeo, esto lanza LazyInitializationException.
+     */
     @GetMapping
+    @Transactional(readOnly = true)
     public ApiResponse<List<LibroResponse>> listar(@RequestParam(required = false) String titulo,
                                                     @RequestParam(required = false) Long categoriaId,
                                                     @RequestParam(required = false) Integer anioDesde,
@@ -68,6 +76,12 @@ public class LibroController {
         Page<Libro> pagina = servicio.buscar(titulo, categoriaId, anioDesde, paginacion);
         List<LibroResponse> datos = pagina.getContent().stream().map(mapper::aRespuesta).toList();
         return ApiResponse.ok(datos, "Libros listados", PageMeta.de(pagina));
+    }
+
+    @GetMapping("/{id}")
+    @Transactional(readOnly = true)
+    public ApiResponse<LibroResponse> buscar(@PathVariable Long id) {
+        return ApiResponse.ok(mapper.aRespuesta(servicio.buscarPorId(id)), "Libro encontrado");
     }
 
     @PostMapping
@@ -81,6 +95,7 @@ public class LibroController {
     }
 
     @GetMapping("/{id}/enriquecido")
+    @Transactional(readOnly = true)
     public ApiResponse<LibroEnriquecidoResponse> enriquecido(@PathVariable Long id) {
         Libro libro = servicio.buscarPorId(id);
         OpenLibraryResponse externo = openLibraryClient.consultarPorIsbn(libro.getIsbn());
@@ -93,5 +108,5 @@ public class LibroController {
         return ApiResponse.ok(cuerpo, "Libro enriquecido con Open Library");
     }
 
-    // TODO-U4-1: implementar los endpoints restantes (detalle, actualizar, eliminar).
+    // TODO-U4-1: implementar los endpoints restantes (actualizar, eliminar).
 }

@@ -1,46 +1,95 @@
 package ec.edu.uteq.appweb.biblioteca.web;
 
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import ec.edu.uteq.appweb.biblioteca.BaseIntegracionTest;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * ============================================================================
- * TODO-U4-5: PRUEBAS DE INTEGRACION (minimo 10 en total en el proyecto)
- * ============================================================================
- *
- * Quite la anotacion @Disabled a medida que implemente cada caso. La Guia PE-U4
- * exige un minimo de diez pruebas de feature o integracion pasando sin fallos,
- * y pide la captura del resultado de la ejecucion dentro del informe.
- *
- * Casos minimos sugeridos, alineados con la rubrica:
- *   1. Login con credenciales correctas devuelve 200 y un token.
- *   2. Login con credenciales invalidas devuelve 401.
- *   3. GET /api/v1/libros sin token devuelve 401.
- *   4. GET /api/v1/libros con rol LECTOR devuelve 200 y trae meta.
- *   5. POST /api/v1/libros con rol LECTOR devuelve 403.
- *   6. POST /api/v1/libros con rol ADMIN y cuerpo valido devuelve 201 con Location.
- *   7. GET /api/v1/libros/{id} inexistente devuelve 404 con ProblemDetail.
- *   8. POST /api/v1/libros con cuerpo invalido devuelve 400 y el arreglo errors poblado.
- *   9. POST /api/v1/prestamos a un socio con tres prestamos activos devuelve 409.
- *  10. Toda respuesta exitosa trae el envoltorio {success, data, message, errors, meta}.
- *
- * Ejecute con:  mvn test
+ * TODO-U4-5: pruebas de integracion del catalogo.
  */
 class LibroControllerIT extends BaseIntegracionTest {
 
+    @Autowired
+    private MockMvc mockMvc;
+
     @Test
-    @Disabled("TODO-U4-5: implementar")
-    @DisplayName("GET /api/v1/libros responde 200 con envoltorio y metadatos de paginacion")
-    void listarLibrosDevuelveEnvoltorio() {
-        throw new UnsupportedOperationException("TODO-U4-5");
+    @DisplayName("GET /api/v1/libros responde 200 con el envoltorio completo y metadatos de paginacion correctos")
+    void listarLibrosDevuelveEnvoltorio() throws Exception {
+        String token = obtenerToken("lector", "Lector123!");
+
+        mockMvc.perform(get("/api/v1/libros")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.*", hasSize(5)))
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.meta.page").value(0))
+                .andExpect(jsonPath("$.meta.size").value(20));
     }
 
     @Test
-    @Disabled("TODO-U4-5: implementar")
-    @DisplayName("POST /api/v1/libros con rol LECTOR responde 403")
-    void crearLibroConRolLectorDevuelveProhibido() {
-        throw new UnsupportedOperationException("TODO-U4-5");
+    @DisplayName("GET /api/v1/libros/999999 responde 404 con ProblemDetail (title, status, detail)")
+    void buscarLibroInexistenteDevuelveProblemDetail() throws Exception {
+        String token = obtenerToken("lector", "Lector123!");
+
+        mockMvc.perform(get("/api/v1/libros/999999")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").exists())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").exists());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/libros con titulo vacio responde 400 con el arreglo errors poblado")
+    void crearLibroConTituloVacioDevuelveValidacion() throws Exception {
+        String token = obtenerToken("admin", "Admin123!");
+        String cuerpo = """
+                {
+                    "isbn": "9780134494166",
+                    "titulo": "",
+                    "anioPublicacion": 2020,
+                    "ejemplaresTotales": 3,
+                    "autorId": 1,
+                    "editorialId": 1,
+                    "categoriaId": 1
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/libros")
+                        .header(HttpHeaders.AUTHORIZATION, token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.errors", hasSize(greaterThan(0))));
+    }
+
+    private String obtenerToken(String username, String password) throws Exception {
+        String credenciales = """
+                {"username": "%s", "password": "%s"}
+                """.formatted(username, password);
+
+        MvcResult resultado = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(credenciales))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return resultado.getResponse().getHeader(HttpHeaders.AUTHORIZATION);
     }
 }
